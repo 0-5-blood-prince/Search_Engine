@@ -131,7 +131,11 @@ class SearchEngine:
 
 		preprocessedDocs = stopwordRemovedDocs
 		return preprocessedDocs
+	
 	def plotter(self, precisions, recalls, fscores, MAPs, nDCGs, method):
+				'''
+					Plots evaluation plot with all evaluation metrics 
+				'''
 				plt.figure()
 				plt.plot(range(1, self.num_retrieved+1), precisions, label="Precision")
 				plt.plot(range(1, self.num_retrieved+1), recalls, label="Recall")
@@ -143,6 +147,9 @@ class SearchEngine:
 				plt.xlabel("rank")
 				plt.savefig(args.out_folder + "eval_plot_"+ method + ".png")
 	def lsi_evaluate(self, processedDocs, processedQueries, doc_ids,query_ids ):
+				'''
+					Implements and evaluates LSI method on preprocesses docs and queries
+				'''
 				self.informationRetriever.buildIndex_lsi(processedDocs, doc_ids, self.dim_red)
 				self.informationRetriever.svd_lsi(doc_ids)
 				doc_IDs_ordered = self.informationRetriever.rank_lsi(processedQueries)
@@ -175,14 +182,17 @@ class SearchEngine:
 						str(k) + " : " + str(MAP) + ", " + str(nDCG))
 				lsi_y , lsi_x = self.evaluator.precision_recall(query_lsi_precisions,query_lsi_recalls,query_ids)
 				# Plot the metrics and save plot 
-				# plt.figure()
-				# plt.plot(lsi_x,lsi_y)
-				# plt.title(" Precision Recall Curve")
-				# plt.savefig(args.out_folder + "precision_recall_curve_lsi.png")
+				plt.figure()
+				plt.plot(lsi_x,lsi_y)
+				plt.title(" Precision Recall Curve")
+				plt.savefig(args.out_folder + "precision_recall_curve_lsi.png")
 				self.plotter(precisions,recalls,fscores,MAPs,nDCGs,'lsi'+str(self.dim_red))
 				return lsi_x, lsi_y , MAPs, recalls
 
 	def basic_evaluate(self, processedDocs, processedQueries, doc_ids,query_ids ):
+				'''
+					Implements and evaluates Basic VSM method on preprocesses docs and queries
+				'''
 				self.informationRetriever.buildIndex_basic(processedDocs, doc_ids)
 				doc_IDs_ordered = self.informationRetriever.rank_basic(processedQueries)
 				qrels = json.load(open(args.dataset + "cran_qrels.json", 'r'))[:]
@@ -214,12 +224,15 @@ class SearchEngine:
 						str(k) + " : " + str(MAP) + ", " + str(nDCG))
 				basic_y , basic_x = self.evaluator.precision_recall(query_basic_precisions,query_basic_recalls,query_ids)
 				# Plot the metrics and save plot 
-				# plt.figure()
-				# plt.plot(basic_x,basic_y)
-				# plt.savefig(args.out_folder + "precision_recall_curve_basic.png")
+				plt.figure()
+				plt.plot(basic_x,basic_y)
+				plt.savefig(args.out_folder + "precision_recall_curve_basic.png")
 				self.plotter(precisions,recalls,fscores,MAPs,nDCGs,'basic')
 				return basic_x, basic_y, MAPs
 	def output_plot(self, doc_IDs_ordered, query_ids, qrels, method):
+				'''
+					 A helper function for Supervised Learning method hypothesis evaluation 
+				'''
 				precisions, recalls, fscores, MAPs, nDCGs = [], [], [], [], []
 				query_precisions = []
 				query_recalls = []
@@ -273,13 +286,20 @@ class SearchEngine:
 		# Process documents
 		processedDocs = self.preprocessDocs(docs)
 
-		self.dim_red = int(self.args.k)
+		# number of factors in SVD 
+		self.dim_red = int(self.args.k) 
+		# To experiment or not
 		experiment = int(self.args.experiment)
+		# method testing hyp1 or hyp2
 		method = self.args.method
 		# Build document index
 		self.num_retrieved = int(self.args.num_retrieved)
+
 		if experiment == 0:
 			if method == 'hyp1':
+				'''
+					Implementing and comparing performance with basic vector space method and LSI with self.dim_red factors
+				'''
 				basic_x, basic_y, bMAPs = self.basic_evaluate(processedDocs,processedQueries,doc_ids,query_ids)
 				lsi_x, lsi_y, lsiMAPs, lsirecalls = self.lsi_evaluate(processedDocs,processedQueries,doc_ids,query_ids)
 				
@@ -291,6 +311,9 @@ class SearchEngine:
 				plt.savefig(args.out_folder + "precision_recall_curve_basic_lsi.png")
 			if method == 'hyp2':
 				# divide queries into training and test set
+				'''
+					Implementing and comparing performance with LSI with self.dim_red factors before and after including relevance feedback 
+				'''
 				self.w = 2.0
 				len_train = int((0.8)* len(processedQueries))
 				len_dev = int((0.1)*len_train)
@@ -337,11 +360,16 @@ class SearchEngine:
 				plt.savefig(args.out_folder + "precision_recall_curve_lsi_sup_test.png")
 
 			if method == 'lsi':
+				# individual lsi method
 				self.lsi_evaluate(processedDocs,processedQueries,doc_ids,query_ids)
 			if method == 'basic':
+				# individual basic method
 				self.basic_evaluate(processedDocs,processedQueries,doc_ids,query_ids)
 		if experiment == 1:
 			if (method == 'hyp1'):
+				'''
+					Experimenting on LSI performance with number of factors
+				'''
 				dims = [10,20,50,100,150,200,250,300,350,400, 800]
 				basic_x, basic_y,bMAPs = self.basic_evaluate(processedDocs,processedQueries,doc_ids,query_ids)
 				MAPs = []
@@ -380,6 +408,9 @@ class SearchEngine:
 				# plt.legend()
 				# plt.savefig(args.out_folder + "Recall_exp.png")
 			if method == "hyp2":
+				'''
+					Experimenting on Supervised learning model performance with w
+				'''
 				len_train = int((0.8)* len(processedQueries))
 				len_dev = int((0.1)*len_train)
 				len_train = len_train - len_dev
@@ -449,10 +480,7 @@ class SearchEngine:
 				plt.legend()
 				plt.savefig(args.out_folder + "MAP_dev_exp.png")
 
-				
-
-
-		
+						
 	def handleCustomQuery(self):
 		"""
 		Take a custom query as input and return top five relevant documents
@@ -470,16 +498,28 @@ class SearchEngine:
 							[item["body"] for item in docs_json]
 		# Process documents
 		processedDocs = self.preprocessDocs(docs)
-
+		self.dim_red = int(self.args.k) 
+		# method testing hyp1 or hyp2
+		method = self.args.method
 		# Build document index
-		self.informationRetriever.buildIndex(processedDocs, doc_ids)
-		# Rank the documents for the query
-		doc_IDs_ordered = self.informationRetriever.rank([processedQuery])[0]
+		if method == 'basic':
+			self.informationRetriever.buildIndex_basic(processedDocs, doc_ids)
+			# Rank the documents for the query
+			doc_IDs_ordered = self.informationRetriever.rank_basic([processedQuery])[0]
 
-		# Print the IDs of first five documents
-		print("\nTop five document IDs : ")
-		for id_ in doc_IDs_ordered[:5]:
-			print(id_)
+			# Print the IDs of first five documents
+			print("\nTop five document IDs : ")
+			for id_ in doc_IDs_ordered[:5]:
+				print(id_)
+		if method == 'lsi':
+			self.informationRetriever.buildIndex_lsi(processedDocs, doc_ids, self.dim_red)
+			self.informationRetriever.svd_lsi(doc_ids)
+			doc_IDs_ordered = self.informationRetriever.rank_lsi([processedQuery])[0]
+			# Print the IDs of first five documents
+			print("\nTop five document IDs : ")
+			for id_ in doc_IDs_ordered[:5]:
+				print(id_)
+
 
 
 
@@ -501,9 +541,10 @@ if __name__ == "__main__":
 						help = "k value LSA hidden feature size")
 	parser.add_argument('-custom', action = "store_true", 
 						help = "Take custom query as input ")
-	parser.add_argument('-num_retrieved', default = '10', help = 'num docs retrieved')
+	parser.add_argument('-num_retrieved', default = '10', help = 'num docs retrieved among the ranked docs(These docs are considered for evaluation purposes)')
+
 	parser.add_argument('-experiment', default = '0', help = 'Whether to run experiments on k')
-	parser.add_argument('-preprocess', default = 'Yes' , help = 'whether to preprocess docs and queries again' )
+		
 	parser.add_argument('-method', default = 'all', help = 'all methods will run by default unless the follwing are mentioned "lsi"  "basic"')
 	# Parse the input arguments
 	args = parser.parse_args()

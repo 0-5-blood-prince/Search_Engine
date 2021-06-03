@@ -415,7 +415,11 @@ class Evaluation():
 		#Fill in code here
 
 		return meanAveragePrecision
+	
 	def precision_recall( self, precisions,recalls, query_ids):
+		'''
+			returns the points required to plot precision recall curve 
+		'''
 		######   precisions    ranks *  num_queries
 		# pass
 		query_tup_list = [{} for i in range(len(query_ids))]

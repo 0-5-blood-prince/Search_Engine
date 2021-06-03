@@ -9,7 +9,7 @@ class InformationRetrieval():
 
 	def __init__(self):
 		self.index = None
-	
+	### Basic vector space model
 	def buildIndex_basic(self, docs, docIDs):
 			"""
 			Builds the document index in terms of the document
@@ -105,7 +105,8 @@ class InformationRetrieval():
 				buff.sort(reverse=True)
 				doc_IDs_ordered.append([i[1] for i in buff])
 			return doc_IDs_ordered
-		
+
+	### Latent Semantic Indexing method	
 	def buildIndex_lsi(self, docs, docIDs, dim):
 		"""
 		Builds the document index in terms of the document
@@ -118,6 +119,8 @@ class InformationRetrieval():
 			a document and each sub-sub-list is a sentence of the document
 		arg2 : list
 			A list of integers denoting IDs of the documents
+		arg 3:
+			Number of factors to perform svd
 		Returns
 		-------
 		None
@@ -162,6 +165,9 @@ class InformationRetrieval():
 		# print(list(self.index.keys())[:4],list(self.index.values())[:4])
 		return
 	def svd_lsi(self , docIDs):
+		'''
+			Performs SVD and stores the required matrices and representations
+		'''
 		self.num_index = []
 		tl = list(self.terms_list)
 		tl.sort()
@@ -185,12 +191,15 @@ class InformationRetrieval():
 		self.v = self.v.T[:, :self.dim]
 		
 		# print(self.num_index)
+		
 		self.num_index = self.u @ self.sig @ self.v.T
+		
 		# print(self.num_index)
 		# print(self.num_index.T.shape , self.u.shape , np.linalg.pinv(self.sig).shape)
 		
 		# self.transform_docs = self.num_index.T   @ self.u @ self.sig
-		self.transform_docs = self.v
+		self.transform_docs = self.v   #### Representation of docs in Semantic space  
+		
 		# self.transform_docs = self.num_index.T
 		for j in range(self.num_docs):
 			self.doc_len[docIDs[j]] = np.linalg.norm(self.transform_docs[j])
@@ -239,16 +248,11 @@ class InformationRetrieval():
 		query_list = np.asarray(query_list)
 
 		print(query_list.shape , self.u.shape , np.linalg.pinv(self.sig).shape)
-		self.transform_queries = query_list  @ self.u @ (self.sig)
+		self.transform_queries = query_list  @ self.u @ (self.sig) ### Representations of Queries in Semantic space
 
 
 
 		
-		# for id in range(len(queries)):
-		# 	v = 0.0
-		# 	for term in self.terms_list:
-		# 		v += (math.pow(query_dic.get((term,id),0.0),2.0))
-		# 	query_len[id] = math.sqrt(v)
 		self.query_len = [0 for i in range(len(queries))]
 		for j in range(len(queries)):
 			self.query_len[j] = np.linalg.norm(self.transform_queries[j])
@@ -266,8 +270,12 @@ class InformationRetrieval():
 			doc_IDs_ordered.append([i[1] for i in buff])
 		return doc_IDs_ordered
 
+
+	### Supervised Learning model which incorporates relevance feedback
 	def train(self, queries, query_ids, qrels, w):
-		
+		'''
+			returns X(which is enough to represent the trained supervised model) and the ranked docs for training queries with LSI and Supervised models
+		'''
 		query_dic = {}
 		query_len = {}
 		query_terms = [[] for i in range(len(queries))]
@@ -292,19 +300,19 @@ class InformationRetrieval():
 		query_list = np.asarray(query_list)
 
 		# print(query_list.shape , self.u.shape , np.linalg.pinv(self.sig).shape)
-		self.transform_queries = query_list @ self.u @ (self.sig)
+		self.transform_queries = query_list @ self.u @ (self.sig) ### Representations of queries in Semantic space
 
 
-		#   Supervised learning is done in context space so below transformation not necessary 
-		# if you want to do it do this transformationa and use num_index instead of tranform docs
+		#  Supervised learning is done in context space so below transformation not necessary 
+		# if you want to do it do this transformations and use num_index which are the representations of docs in term space instead of tranform docs
 		# self.transform_queries = self.u @ self.sig @ np.transpose(self.transform_queries)
 		
-		
+		################################  Preprocessing the representations of docs and queries in semantic space ###########################
 		self.query_len = [0 for i in range(len(queries))]
 		for j in range(len(queries)):
 			self.query_len[j] = np.linalg.norm(self.transform_queries[j])
 			self.transform_queries[j] /= self.query_len[j]
-		self.transform_queries = self.transform_queries.T 
+		self.transform_queries = self.transform_queries.T  
 		
 		shape_Q = self.transform_queries.shape
 		# assert(shape_Q[0]==self.dim and shape_Q[1]==len(queries))
@@ -316,8 +324,10 @@ class InformationRetrieval():
 
 		shape_D = self.transform_docs.shape
 		# assert(shape_D[0]==self.dim and shape_D[1]==self.num_docs)
-		print(self.transform_queries.shape,self.transform_docs.shape)
+		# print(self.transform_queries.shape,self.transform_docs.shape)
 
+
+		########################### FINDING X part ################################
 		Q_concat = np.concatenate((self.transform_queries, self.transform_docs),axis=1) 
 		# Q_concat = self.transform_queries
 		A = np.zeros((self.num_docs,len(queries)))
@@ -336,7 +346,7 @@ class InformationRetrieval():
 		A = A * w
 		A_concat = np.concatenate((A,(self.transform_docs.T @ self.transform_docs)), axis=1)
 		# A_concat = A
-		print(A_concat)
+		# print(A_concat)
 		print("Norm A concat :",np.linalg.norm(A_concat))
 		#solving M*
 		q,r = np.linalg.qr(self.transform_docs.T)
@@ -357,6 +367,7 @@ class InformationRetrieval():
 		X_star = X_star_trans.T
 		# assert(X_star.shape==(self.dim,self.dim))
 
+		###################### Similarity Matrix calculation #####################################
 		sim_matrix_sup = self.transform_docs.T @ X_star @ Q_concat 
 		sim_matrix_sup = sim_matrix_sup[:,:(len(queries))]
 		sim_matrix_lsi = self.transform_docs.T @ self.transform_queries
@@ -377,10 +388,12 @@ class InformationRetrieval():
 			buff_sup.sort(reverse=True)
 			doc_IDs_ordered_lsi.append([i[1] for i in buff_lsi])
 			doc_IDs_ordered_sup.append([i[1] for i in buff_sup])
-		# for i in range(self.num_docs):
-		# 	print(A.T[0][i],sim_matrix_lsi.T[0][i],sim_matrix_sup.T[0][i])
+	
 		return X_star  , doc_IDs_ordered_lsi, doc_IDs_ordered_sup
 	def test(self, queries, query_ids, qrels, X):
+		'''
+			returns the ranked docs for testing queries with LSI and Supervised model(the model trained in function train)
+		'''
 		query_dic = {}
 		query_len = {}
 		query_terms = [[] for i in range(len(queries))]
@@ -412,7 +425,7 @@ class InformationRetrieval():
 		# if you want to do it do this transformationa and use num_index instead of tranform docs
 		# self.transform_queries = self.u @ self.sig @ np.transpose(self.transform_queries)
 		
-		
+		################################  Preprocessing the representations of queries in semantic space ###########################
 		self.query_len = [0 for i in range(len(queries))]
 		for j in range(len(queries)):
 			self.query_len[j] = np.linalg.norm(self.transform_queries[j])
@@ -423,22 +436,9 @@ class InformationRetrieval():
 		# assert(shape_Q[0]==self.dim and shape_Q[1]==len(queries))
 
 		Q_concat = np.concatenate((self.transform_queries, self.transform_docs),axis=1)
-		# Q_concat = self.transform_queries
 		
-		# A = np.zeros((self.num_docs,len(queries)))
-		# d = {}
-		# for q in query_ids:
-		# 	d[q] = set() 
-		# for e in qrels:
-		# 	if int(e["query_num"]) in d:
-		# 		d[int(e["query_num"])].add(int(e["id"]))
+		############################# SImilarity Matrix Calculation #####################################
 
-		# for i in range(len(queries)):
-		# 	for j in range(self.num_docs):
-		# 		if self.doc_id[j] in d[query_ids[i]]:
-		# 			A[j][i] = 1
-		# print(A)
-		# A_concat = np.concatenate((A,(self.transform_docs.T @ self.transform_docs)), axis=1)
 		sim_matrix_sup = self.transform_docs.T @ X @ Q_concat 
 		sim_matrix_sup = sim_matrix_sup[:,:(len(queries))]
 		sim_matrix_lsi = self.transform_docs.T @ self.transform_queries
@@ -459,6 +459,7 @@ class InformationRetrieval():
 			buff_sup.sort(reverse=True)
 			doc_IDs_ordered_lsi.append([i[1] for i in buff_lsi])
 			doc_IDs_ordered_sup.append([i[1] for i in buff_sup])
+
 		return doc_IDs_ordered_lsi, doc_IDs_ordered_sup
 
 
